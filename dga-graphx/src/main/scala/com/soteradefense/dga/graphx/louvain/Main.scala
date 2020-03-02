@@ -4,22 +4,24 @@ import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.graphx._
-
+import org.apache.log4j.{Level, Logger}
+import org.apache.log4j
 
 // specify command line options and their defaults
 case class Config(
-                   input: String = "",
-                   output: String = "",
+                   input: String = "./examples/small_edges.tsv",
+                   output: String = "./examples/testoutput",
                    master: String = "local",
                    appName: String = "graphX analytic",
                    jars: String = "",
                    sparkHome: String = "",
                    parallelism: Int = -1,
-                   edgedelimiter: String = ",",
+                   edgedelimiter: String = "\t",
                    minProgress: Int = 2000,
                    progressCounter: Int = 1,
                    ipaddress: Boolean = false,
-                   properties: Seq[(String, String)] = Seq.empty[(String, String)])
+                   properties: Seq[(String, String)] = Seq.empty[(String, String)]
+                 )
 
 
 /**
@@ -30,7 +32,7 @@ object Main {
 
   def main(args: Array[String]) {
 
-    // Parse Command line options
+//     Parse Command line options
     val parser = new scopt.OptionParser[Config](this.getClass().toString()) {
       opt[String]('i', "input") action { (x, c) => c.copy(input = x) } text ("input file or path  Required.")
       opt[String]('o', "output") action { (x, c) => c.copy(output = x) } text ("output path Required")
@@ -46,6 +48,11 @@ object Main {
       arg[(String, String)]("<property>=<value>....") unbounded() optional() action { case ((k, v), c) => c.copy(properties = c.properties :+ (k, v)) }
     }
     var edgeFile, outputdir, master, jobname, jars, sparkhome, edgedelimiter = ""
+//    master = "local[*]"
+    edgeFile = "./examples/small_edges.tsv"
+    outputdir = "./examples/testoutput"
+    edgedelimiter = "\t"
+//    jobname = "testtest"
     var properties: Seq[(String, String)] = Seq.empty[(String, String)]
     var parallelism, minProgress, progressCounter = -1
     var ipaddress = false
@@ -89,6 +96,12 @@ object Main {
       sc = new SparkContext(master, jobname, sparkhome, jars.split(","))
     }
 
+    val rootLogger = Logger.getRootLogger()
+    rootLogger.info(s"root logger name is " + rootLogger.getName())
+    rootLogger.setLevel(Level.INFO)
+    Logger.getLogger("org.apache.spark").setLevel(Level.OFF)
+    Logger.getLogger("akka").setLevel(Level.OFF)
+
     // read the input into a distributed edge list
     val inputHashFunc = if (ipaddress) (id: String) => IpAddress.toLong(id) else (id: String) => id.toLong
     var edgeRDD = sc.textFile(edgeFile).map(row => {
@@ -105,6 +118,8 @@ object Main {
         }
       }
     })
+    rootLogger.warn("edge rdd is: ")
+    rootLogger.warn(edgeRDD)
 
     // if the parallelism option was set map the input to the correct number of partitions,
     // otherwise parallelism will be based off number of HDFS blocks
@@ -112,13 +127,17 @@ object Main {
 
     // create the graph
     val graph = Graph.fromEdges(edgeRDD, None)
-
+    println("edges is: ")
+    println(graph.edges.collect())
+    println("vertices is: ")
+    println(graph.vertices.collect())
     // use a helper class to execute the louvain
     // algorithm and save the output.
     // to change the outputs you can extend LouvainRunner.scala
     val runner = new HDFSLouvainRunner(minProgress, progressCounter, outputdir)
+    println("runner rdd is: ")
+    println(runner)
     runner.run(sc, graph)
-
 
   }
 

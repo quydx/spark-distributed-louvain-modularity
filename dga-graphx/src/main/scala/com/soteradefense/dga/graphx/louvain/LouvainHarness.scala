@@ -36,7 +36,6 @@ import org.apache.spark.Logging
  */
 class LouvainHarness(minProgress: Int, progressCounter: Int) {
 
-
   def run[VD: ClassTag](sc: SparkContext, graph: Graph[VD, Long]) = {
 
     var louvainGraph = LouvainCore.createLouvainGraph(graph)
