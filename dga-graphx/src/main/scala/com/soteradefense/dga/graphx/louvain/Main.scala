@@ -9,14 +9,14 @@ import org.apache.log4j
 
 // specify command line options and their defaults
 case class Config(
-                   input: String = "./examples/small_edges.tsv",
+                   input: String = "./examples/relationships1.csv",
                    output: String = "./examples/testoutput",
                    master: String = "local",
                    appName: String = "graphX analytic",
                    jars: String = "",
                    sparkHome: String = "",
                    parallelism: Int = -1,
-                   edgedelimiter: String = "\t",
+                   edgedelimiter: String = ",",
                    minProgress: Int = 2000,
                    progressCounter: Int = 1,
                    ipaddress: Boolean = false,
@@ -49,13 +49,13 @@ object Main {
     }
     var edgeFile, outputdir, master, jobname, jars, sparkhome, edgedelimiter = ""
 //    master = "local[*]"
-    edgeFile = "./examples/small_edges.tsv"
+    edgeFile = "./examples/relationships1.csv"
     outputdir = "./examples/testoutput"
-    edgedelimiter = "\t"
+    edgedelimiter = ","
 //    jobname = "testtest"
     var properties: Seq[(String, String)] = Seq.empty[(String, String)]
     var parallelism, minProgress, progressCounter = -1
-    var ipaddress = false
+    var ipaddress = true
 
     parser.parse(args, Config()) map {
       config =>
@@ -85,6 +85,11 @@ object Main {
       System.setProperty(k, v)
     })
 
+    val rootLogger = Logger.getRootLogger()
+    rootLogger.info(s"root logger name is " + rootLogger.getName())
+    rootLogger.setLevel(Level.INFO)
+    Logger.getLogger("org.apache.spark").setLevel(Level.OFF)
+    Logger.getLogger("akka").setLevel(Level.OFF)
     // Create the spark context
     var sc: SparkContext = null
     if (master.indexOf("local") == 0) {
@@ -96,37 +101,35 @@ object Main {
       sc = new SparkContext(master, jobname, sparkhome, jars.split(","))
     }
 
-    val rootLogger = Logger.getRootLogger()
-    rootLogger.info(s"root logger name is " + rootLogger.getName())
-    rootLogger.setLevel(Level.INFO)
-    Logger.getLogger("org.apache.spark").setLevel(Level.OFF)
-    Logger.getLogger("akka").setLevel(Level.OFF)
 
     // read the input into a distributed edge list
-    val inputHashFunc = if (ipaddress) (id: String) => IpAddress.toLong(id) else (id: String) => id.toLong
+//    val inputHashFunc = if (ipaddress) (id: String) => IpAddress.toLong(id) else (id: String) => id.toLong
     var edgeRDD = sc.textFile(edgeFile).map(row => {
       val tokens = row.split(edgedelimiter).map(_.trim())
       tokens.length match {
-        case 2 => {
-          new Edge(inputHashFunc(tokens(0)), inputHashFunc(tokens(1)), 1L)
-        }
+//        case 2 => {
+//          new Edge(inputHashFunc(tokens(0)), inputHashFunc(tokens(1)), 1L)
+//          new Edge(tokens(0), tokens(1), 1L)
+//        }
         case 3 => {
-          new Edge(inputHashFunc(tokens(0)), inputHashFunc(tokens(1)), tokens(2).toLong)
+//          new Edge(inputHashFunc(tokens(0)), inputHashFunc(tokens(1)), tokens(2).toLong)
+          new Edge(tokens(0).hashCode.toLong, tokens(2).hashCode.toLong, tokens(1).toFloat)
         }
         case _ => {
           throw new IllegalArgumentException("invalid input line: " + row)
         }
       }
     })
-    rootLogger.warn("edge rdd is: ")
-    rootLogger.warn(edgeRDD)
-
+    rootLogger.info("edge rdd is: ")
+    rootLogger.info(edgeRDD)
+    rootLogger.info("edge count is: " + edgeRDD.count())
+    edgeRDD.take(10) foreach(println)
     // if the parallelism option was set map the input to the correct number of partitions,
     // otherwise parallelism will be based off number of HDFS blocks
     if (parallelism != -1) edgeRDD = edgeRDD.coalesce(parallelism, shuffle = true)
 
     // create the graph
-    val graph = Graph.fromEdges(edgeRDD, None)
+    val graph = Graph.fromEdges(edgeRDD, "similar")
     println("edges is: ")
     println(graph.edges.collect())
     println("vertices is: ")
@@ -138,7 +141,6 @@ object Main {
     println("runner rdd is: ")
     println(runner)
     runner.run(sc, graph)
-
   }
 
 

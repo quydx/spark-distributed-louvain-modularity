@@ -1,8 +1,10 @@
 package com.soteradefense.dga.graphx.louvain
 
+import org.apache.log4j.Logger
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
 import org.apache.spark.graphx._
+
 import scala.reflect.ClassTag
 import org.apache.spark.Logging
 
@@ -37,7 +39,7 @@ import org.apache.spark.Logging
 class LouvainHarness(minProgress: Int, progressCounter: Int) {
 
   def run[VD: ClassTag](sc: SparkContext, graph: Graph[VD, Long]) = {
-
+    val rootLogger = Logger.getRootLogger()
     var louvainGraph = LouvainCore.createLouvainGraph(graph)
 
     var level = -1 // number of times the graph has been compressed
@@ -49,14 +51,23 @@ class LouvainHarness(minProgress: Int, progressCounter: Int) {
 
       // label each vertex with its best community choice at this level of compression
       val (currentQ, currentGraph, passes) = LouvainCore.louvain(sc, louvainGraph, minProgress, progressCounter)
+
+      rootLogger.info("currentQ: "+ currentQ)
       louvainGraph.unpersistVertices(blocking = false)
       louvainGraph = currentGraph
 
-      saveLevel(sc, level, currentQ, louvainGraph)
+      rootLogger.info("louvainGraph vertices: ")
+      val vertices = louvainGraph.vertices.collect()
+      vertices foreach rootLogger.info
+      rootLogger.info("louvainGraph edges: " + louvainGraph.edges.collect())
 
+//      saveLevel(sc, level, currentQ, louvainGraph)
+
+      val edges = louvainGraph.vertices.collect()
+      edges foreach rootLogger.info
       // If modularity was increased by at least 0.001 compress the graph and repeat
       // halt immediately if the community labeling took less than 3 passes
-      //println(s"if ($passes > 2 && $currentQ > $q + 0.001 )")
+      println(s"if ($passes > 2 && $currentQ > $q + 0.001 )")
       if (passes > 2 && currentQ > q + 0.001) {
         q = currentQ
         louvainGraph = LouvainCore.compressGraph(louvainGraph)
@@ -64,9 +75,9 @@ class LouvainHarness(minProgress: Int, progressCounter: Int) {
       else {
         halt = true
       }
-
+//      halt = true
     } while (!halt)
-    finalSave(sc, level, q, louvainGraph)
+//    finalSave(sc, level, q, louvainGraph)
   }
 
   /**
@@ -75,8 +86,9 @@ class LouvainHarness(minProgress: Int, progressCounter: Int) {
    *
    * override to specify save behavior
    */
-  def saveLevel(sc: SparkContext, level: Int, q: Double, graph: Graph[VertexState, Long]) = {
-
+   def saveLevel(sc: SparkContext, level: Int, q: Double, graph: Graph[VertexState, Long]) = {
+    val rootLogger = Logger.getRootLogger()
+    rootLogger.info("saveLevel")
   }
 
   /**
@@ -84,8 +96,9 @@ class LouvainHarness(minProgress: Int, progressCounter: Int) {
    *
    * override to specify save behavior
    */
-  def finalSave(sc: SparkContext, level: Int, q: Double, graph: Graph[VertexState, Long]) = {
-
+   def finalSave(sc: SparkContext, level: Int, q: Double, graph: Graph[VertexState, Long]) = {
+    val rootLogger = Logger.getRootLogger()
+    rootLogger.info("finalSave")
   }
 
 

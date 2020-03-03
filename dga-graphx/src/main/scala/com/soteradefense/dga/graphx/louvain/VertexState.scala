@@ -7,9 +7,9 @@ package com.soteradefense.dga.graphx.louvain
 class VertexState extends Serializable{
 
   var community = -1L
-  var communitySigmaTot = 0L
-  var internalWeight = 0L  // self edges
-  var nodeWeight = 0L;  //out degree
+  var communitySigmaTot = 0F
+  var internalWeight = 0F  // self edges
+  var nodeWeight = 0F;  //out degree
   var changed = false
    
   override def toString(): String = {
